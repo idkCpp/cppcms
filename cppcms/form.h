@@ -19,6 +19,7 @@
 #include <stack>
 #include <ostream>
 #include <sstream>
+#include <type_traits>
 #include <cppcms/http_context.h>
 #include <cppcms/http_request.h>
 #include <cppcms/http_response.h>
@@ -954,9 +955,10 @@ namespace cppcms {
 		///
 		template<typename T>
 		class numeric: public base_html_input {
+			static_assert(std::is_arithmetic<T>::value, "T of numeric has to be an arithmetic type");
 		public:
 			numeric() :
-				base_html_input("text"),
+				base_html_input("number"),
 				check_low_(false),
 				check_high_(false),
 				non_empty_(false)
@@ -1035,6 +1037,19 @@ namespace cppcms {
 					context.out()<<"value=\""<<value_<<"\" ";
 				else
 					context.out()<<"value=\""<<util::escape(loaded_string_)<<"\" ";
+				if (check_high_)
+					context.out()<<"max=\""<<max_<<"\" ";
+				if (check_low_)
+					context.out()<<"min=\""<<min_<<"\" ";
+// This can be removed when merging upstream.
+// I just wanted to emphasize that this check can be made at compile time. (when using c++17)
+#if __cplusplus >= 201703L
+				if constexpr (std::is_floating_point_v<T>) {
+#else
+				if (std::is_floating_point<T>::value) {
+#endif
+					context.out()<<"step=\"0.1\" ";
+				}
 			}
 
 			virtual void clear()
