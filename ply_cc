@@ -1,0 +1,263 @@
+#!/usr/bin/env python
+
+import os
+import re
+import sys
+
+import ply.lex as lex
+import ply.yacc as yacc
+
+states = [
+	('statement', 'exclusive'),
+    ('statementcommand', 'exclusive'),
+    ('cppcommand', 'exclusive'),
+	('block', 'exclusive')
+	#('HTML', 'exclusive')
+]
+
+tokens = [
+    'NL',
+    'COMMAND',
+    'BEGIN_STATEMENT','END_STATEMENT',
+    'NUMBER','IDENTIFIER','STRING','CHAR','ZERO',
+    'SCOPE', 'MEMBER', 'PTRMEMBER', 'LPAREN', 'RPAREN', 'COMMA', 'INC', 'DEC',
+    'HTML'
+    ]
+
+reserved = {
+        '=' : 'EQ',
+        'skin' : 'SKIN',
+        'view' : 'VIEW',
+        'uses' : 'USES',
+        'template' : 'TMPL',
+        'extends' : 'EXTENDS',
+        'end' : 'END',
+        'c++' : 'CPP',
+        }
+
+tokens += reserved.values()
+
+t_ignore = " \t\n"
+t_statementcommand_ignore = " \t\n"
+t_statement_ignore = " \t\n"
+t_block_ignore = ""
+t_cppcommand_ignore = ""
+
+def t_begin_statement(t):
+    r'<%'
+    t.lexer.push_state('statement')
+    t.lexer.push_state('statementcommand')
+    print("enter state statement command")
+    t.type = 'BEGIN_STATEMENT'
+    return t
+
+def t_statementcommand_COMMAND(t):
+    r'[^ \t\n]+'
+
+    if t.value not in reserved:
+        raise Exception(t.value + " is not a valid command")
+
+    t.type = reserved[t.value]
+    t.lexer.pop_state()
+    t.lexer.command = t.type
+    if t.type == 'CPP':
+        t.lexer.pop_state()
+        t.lexer.push_state('cppcommand')
+        print("enter state cppcommand")
+    else:
+        print("enter state statement for command " + t.type)
+    return t
+
+t_cppcommand_COMMAND = r'.+(?=%>)'
+
+def t_statement_end(t):
+    r'%>'
+    t.lexer.pop_state()
+    print("leave")
+    if t.lexer.command == 'TMPL':
+        t.lexer.push_state('block')
+        print("enter block")
+    elif t.lexer.command == 'END':
+        if t.lexer.lexstate == 'block':
+            t.lexer.pop_state()
+            print("leave block")
+    t.type = 'END_STATEMENT'
+    return t
+
+t_cppcommand_end = t_statement_end
+
+
+t_statement_INC = r'\+\+'
+t_statement_SCOPE = r'::'
+t_statement_MEMBER = r'\.'
+t_statement_PTRMEMBER = r'->'
+t_statement_LPAREN = r'\('
+t_statement_RPAREN = r'\)'
+t_statement_COMMA = r','
+t_statement_STRING = r'"([^"]|\\")*"'
+t_statement_CHAR = r'\'.\''
+
+t_block_HTML = r'([^<]|<(?!%))+'
+
+t_block_begin_statement = t_begin_statement
+
+def t_statement_IDENTIFIER(t):
+    r'[a-zA-Z]\w*'
+    t.type = reserved.get(t.value, 'IDENTIFIER')
+    return t
+
+
+def t_error(t):
+    print('error: ' + str(t))
+    return t
+
+t_statement_error = t_error
+t_statementcommand_error = t_error
+t_cppcommand_error = t_error
+t_block_error = t_error
+
+def p_translation_unit(p):
+    '''translation_unit : translation_unit decl
+                        | decl'''
+    if type(p[1]) == list:
+        p[0] = p[1] + [ p[2] ]
+    else:
+        p[0] = [ p[1] ]
+
+def p_decl(p):
+    '''decl : cpp_decl
+            | skin_decl'''
+    p[0] = p[1]
+
+def p_cpp_decl(p):
+    'cpp_decl : BEGIN_STATEMENT CPP COMMAND END_STATEMENT'
+    p[0] = ( 'CPP', p[3] )
+
+def p_skin_decl(p):
+    'skin_decl : begin_skin_block view_seq end_block'
+    p[0] = ( 'skin', p[1], p[2] )
+
+def p_begin_skin_block(p):
+    'begin_skin_block : BEGIN_STATEMENT SKIN IDENTIFIER END_STATEMENT'
+    p[0] = p[3]
+
+def p_view_seq(p):
+    '''view_seq : view_seq view_decl
+                | view_decl'''
+    if len(p) == 3:
+        p[0] = p[1] + [ p[2] ]
+    else:
+        p[0] = [ p[1] ]
+
+def p_end_block(p):
+    'end_block : BEGIN_STATEMENT END optional_block_type END_STATEMENT'
+    p[0] = ( 'end', )
+
+def p_optional_block_type(p):
+    '''optional_block_type : TMPL
+                           | VIEW
+                           | SKIN
+                           |'''
+
+def p_view_decl(p):
+    'view_decl : begin_view_block template_seq end_block'
+    p[0] = ( 'view', p[1], p[2] )
+
+def p_begin_view_block(p):
+    '''begin_view_block : BEGIN_STATEMENT VIEW IDENTIFIER USES possibly_scoped_identifier END_STATEMENT
+                        | BEGIN_STATEMENT VIEW IDENTIFIER USES possibly_scoped_identifier EXTENDS IDENTIFIER END_STATEMENT'''
+    if len(p) == 7:
+        p[0] = ( p[3], p[5], None )
+    else:
+        p[0] = ( p[3], p[5], p[7] )
+
+def p_possibly_scoped_identifier(p):
+    '''possibly_scoped_identifier : possibly_scoped_identifier SCOPE IDENTIFIER
+                                  | IDENTIFIER'''
+    if len(p) == 4:
+        p[0] = p[1] + '::' + p[3]
+    else:
+        p[0] = p[1]
+
+def p_template_seq(p):
+    '''template_seq : template_seq template_decl
+                    | template_decl
+                    |'''
+    if len(p) == 3:
+        p[0] = p[1] + [ p[2] ]
+    elif len(p) == 2:
+        p[0] = [ p[1] ]
+    else:
+        p[0] = []
+
+def p_template_decl(p):
+    '''template_decl : begin_template_block html_block end_block'''
+    p[0] = ( p[1][0], p[1][1], p[2] )
+
+def p_begin_template_block(p):
+    '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT
+                            | BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN EQ ZERO END_STATEMENT'''
+    p[0] = ( 'template' if len(p) == 8 else 'abstract-template' , p[3] + '(' + p[5] + ')' )
+
+def p_expr_list(p):
+    '''expr_list : IDENTIFIER
+                 |'''
+    p[0] = p[1] if len(p) == 2 else ''
+
+def p_html_block_from_HTML(p):
+    '''html_block : html_block html_statement
+                  |'''
+    if len(p) == 3:
+        p[0] = p[1] + [ p[2] ]
+    else:
+        p[0] = []
+
+def p_html_statement_from_cpp_decl(p):
+    'html_statement : cpp_decl'
+    p[0] = p[1]
+
+def p_html_statement_from_expr_output(p):
+    'html_statement : BEGIN_STATEMENT EQ expr END_STATEMENT'
+    p[0] = ( 'output', p[3] )
+
+def p_html_statement_from_HTML(p):
+    'html_statement : HTML'
+    p[0] = ( 'html', p[1] )
+
+def p_expr(p):
+    'expr : IDENTIFIER'
+    p[0] = p[1]
+
+lexer = lex.lex()
+parser = yacc.yacc()
+
+
+input_data = """
+<% c++ #include "content/bitgroup.h" %>
+<% c++ #include "parent.tmpl.h" %>
+<% skin canmap %>
+	<% view bitgroup uses content::bitgroup extends parent %>
+
+		<% template page_content() %>
+<html>
+    <head>
+        <title>Stuff blah<%= title %></title>
+        < TEST_ME %>
+    </head>
+</html>
+		<% end template %>
+	<% end view %>
+<% end skin %>
+"""
+
+if False:
+    lexer.input(input_data)
+
+    while True:
+        tok = lexer.token()
+        if not tok:
+            break
+        print(tok)
+else:
+    tree = yacc.parse(input_data, lexer=lexer)
+    print(tree)
