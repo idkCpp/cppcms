@@ -4,8 +4,8 @@ import os
 import re
 import sys
 
-import ply.lex as lex
-import ply.yacc as yacc
+#import ply.lex as lex
+#import ply.yacc as yacc
 
 states = [
 	('statement', 'exclusive'),
@@ -20,7 +20,7 @@ tokens = [
     'COMMAND',
     'BEGIN_STATEMENT','END_STATEMENT',
     'NUMBER','IDENTIFIER','STRING','CHAR','ZERO',
-    'SCOPE', 'MEMBER', 'PTRMEMBER', 'LPAREN', 'RPAREN', 'COMMA', 'INC', 'DEC',
+    'SCOPE', 'MEMBER', 'PTRMEMBER', 'LPAREN', 'RPAREN', 'COMMA', 'INC', 'DEC', 'STAR',
     'HTML'
     ]
 
@@ -31,6 +31,14 @@ reserved = {
         'uses' : 'USES',
         'template' : 'TMPL',
         'extends' : 'EXTENDS',
+        'url' : 'URL',
+        'using' : 'USING',
+        'if' : 'IF',
+        'not' : 'NOT',
+        'else' : 'ELSE',
+        'foreach' : 'FOREACH',
+        'in' : 'IN',
+        'item' : 'ITEM',
         'end' : 'END',
         'c++' : 'CPP',
         }
@@ -74,7 +82,7 @@ def t_statement_end(t):
     r'%>'
     t.lexer.pop_state()
     print("leave")
-    if t.lexer.command == 'TMPL':
+    if t.lexer.command in [ 'TMPL', 'IF', 'FOREACH', 'ITEM' ]:
         t.lexer.push_state('block')
         print("enter block")
     elif t.lexer.command == 'END':
@@ -96,6 +104,7 @@ t_statement_RPAREN = r'\)'
 t_statement_COMMA = r','
 t_statement_STRING = r'"([^"]|\\")*"'
 t_statement_CHAR = r'\'.\''
+t_statement_STAR = r'\*'
 
 t_block_HTML = r'([^<]|<(?!%))+'
 
@@ -157,6 +166,7 @@ def p_optional_block_type(p):
     '''optional_block_type : TMPL
                            | VIEW
                            | SKIN
+                           | ITEM
                            |'''
 
 def p_view_decl(p):
@@ -192,17 +202,23 @@ def p_template_seq(p):
 
 def p_template_decl(p):
     '''template_decl : begin_template_block html_block end_block'''
-    p[0] = ( p[1][0], p[1][1], p[2] )
+    p[0] = ( p[1][0], p[1][1], p[1][2], p[2] )
 
 def p_begin_template_block(p):
     '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT
                             | BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN EQ ZERO END_STATEMENT'''
-    p[0] = ( 'template' if len(p) == 8 else 'abstract-template' , p[3] + '(' + p[5] + ')' )
+    p[0] = ( 'template' if len(p) == 8 else 'abstract-template' , p[3], p[5] )
 
 def p_expr_list(p):
-    '''expr_list : IDENTIFIER
+    '''expr_list : expr_list COMMA expr
+                 | expr
                  |'''
-    p[0] = p[1] if len(p) == 2 else ''
+    if len(p) == 4:
+        p[0] = p[1] + [ p[3] ]
+    elif len(p) == 2:
+        p[0] = [ p[1] ]
+    else:
+        p[0] = []
 
 def p_html_block_from_HTML(p):
     '''html_block : html_block html_statement
@@ -216,20 +232,79 @@ def p_html_statement_from_cpp_decl(p):
     'html_statement : cpp_decl'
     p[0] = p[1]
 
-def p_html_statement_from_expr_output(p):
-    'html_statement : BEGIN_STATEMENT EQ expr END_STATEMENT'
-    p[0] = ( 'output', p[3] )
+def p_html_statement_from_render_command(p):
+    'html_statement : BEGIN_STATEMENT render_command END_STATEMENT'
+    p[0] = p[2]
+
+def p_html_statement_from_flow_control(p):
+    '''html_statement : if_statement html_block end_block
+                      | if_statement html_block else_statement html_block end_block
+                      | foreach_statement html_block item_statement html_block end_block html_block end_block'''
+    if len(p) == 4:
+        p[0] = ( 'if', p[1], p[2], None )
+    elif len(p) == 6:
+        p[0] = ( 'if', p[1], p[2], p[4] )
+    elif len(p) == 8:
+        p[0] = ( 'foreach', p[1], p[2], p[4], p[6] )
+
+def p_if_statement(p):
+    '''if_statement : BEGIN_STATEMENT IF expr END_STATEMENT
+                    | BEGIN_STATEMENT IF NOT expr END_STATEMENT'''
+    if len(p) == 5:
+        p[0] = p[3]
+    else:
+        p[0] = '~(' + p[4] + ')'
+
+def p_else_statement(p):
+    'else_statement : BEGIN_STATEMENT ELSE END_STATEMENT'
+    pass
+
+def p_foreach_statement(p):
+    '''foreach_statement : BEGIN_STATEMENT FOREACH IDENTIFIER IN expr END_STATEMENT
+                         | BEGIN_STATEMENT FOREACH ITEM IN expr END_STATEMENT'''
+    p[0] = ( p[3], p[5] )
+
+def p_item_statement(p):
+    'item_statement : BEGIN_STATEMENT ITEM END_STATEMENT'
+    pass
+
+def p_render_command(p):
+    '''render_command : EQ expr
+                      | IF expr
+                      | IF NOT expr
+                      | URL STRING
+                      | URL STRING USING expr_list'''
+    if reserved[p[1]] == 'EQ':
+        p[0] = ( 'output', p[2] )
+    elif reserved[p[1]] == 'IF':
+        if reserved[p[1]] == 'NOT':
+            p[0] = ( 'if', '~(' + p[3] + ')' )
+        else:
+            p[0] = ( 'if', p[3] )
+    elif reserved[p[1]] == 'URL':
+        if len(p) == 5:
+            p[0] = ( 'url', p[2], p[4] )
+        else:
+            p[0] = ( 'url', p[2], None )
 
 def p_html_statement_from_HTML(p):
     'html_statement : HTML'
     p[0] = ( 'html', p[1] )
 
 def p_expr(p):
-    'expr : IDENTIFIER'
-    p[0] = p[1]
+    '''expr : IDENTIFIER
+            | expr MEMBER expr
+            | STAR expr
+            | ITEM'''
+    if len(p) == 2:
+        p[0] = p[1]
+    elif len(p) == 3:
+        p[0] = p[1] + p[2]
+    elif len(p) == 4:
+        p[0] = p[1] + p[2] + p[3]
 
-lexer = lex.lex()
-parser = yacc.yacc()
+#lexer = lex.lex()
+#parser = yacc.yacc()
 
 
 input_data = """
@@ -251,13 +326,14 @@ input_data = """
 """
 
 if False:
-    lexer.input(input_data)
+    if False:
+        lexer.input(input_data)
 
-    while True:
-        tok = lexer.token()
-        if not tok:
-            break
-        print(tok)
-else:
-    tree = yacc.parse(input_data, lexer=lexer)
-    print(tree)
+        while True:
+            tok = lexer.token()
+            if not tok:
+                break
+            print(tok)
+    else:
+        tree = yacc.parse(input_data, lexer=lexer)
+        print(tree)
