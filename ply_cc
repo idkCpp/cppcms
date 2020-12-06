@@ -55,7 +55,6 @@ def t_begin_statement(t):
     r'<%'
     t.lexer.push_state('statement')
     t.lexer.push_state('statementcommand')
-    print("enter state statement command")
     t.type = 'BEGIN_STATEMENT'
     return t
 
@@ -71,9 +70,6 @@ def t_statementcommand_COMMAND(t):
     if t.type == 'CPP':
         t.lexer.pop_state()
         t.lexer.push_state('cppcommand')
-        print("enter state cppcommand")
-    else:
-        print("enter state statement for command " + t.type)
     return t
 
 t_cppcommand_COMMAND = r'.+(?=%>)'
@@ -81,14 +77,11 @@ t_cppcommand_COMMAND = r'.+(?=%>)'
 def t_statement_end(t):
     r'%>'
     t.lexer.pop_state()
-    print("leave")
     if t.lexer.command in [ 'TMPL', 'IF', 'FOREACH', 'ITEM' ]:
         t.lexer.push_state('block')
-        print("enter block")
     elif t.lexer.command == 'END':
         if t.lexer.lexstate == 'block':
             t.lexer.pop_state()
-            print("leave block")
     t.type = 'END_STATEMENT'
     return t
 
