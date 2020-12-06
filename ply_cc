@@ -244,9 +244,9 @@ def p_if_statement(p):
     '''if_statement : BEGIN_STATEMENT IF expr END_STATEMENT
                     | BEGIN_STATEMENT IF NOT expr END_STATEMENT'''
     if len(p) == 5:
-        p[0] = p[3]
+        p[0] = ( p[3], False )
     else:
-        p[0] = '~(' + p[4] + ')'
+        p[0] = ( p[4], True ) # inverted
 
 def p_else_statement(p):
     'else_statement : BEGIN_STATEMENT ELSE END_STATEMENT'
