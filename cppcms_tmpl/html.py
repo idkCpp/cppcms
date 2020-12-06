@@ -57,7 +57,7 @@ class IfStatement:
         return 'IfStatement(' + ('inverted:' if self.inverted else '') + self.expression + ')@' + str(self.lineno)
     def cg(self, w):
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        clause = self.expression if not self.inverted else '!(' + self.expression + ')'
+        clause = w.variable(self.expression) if not self.inverted else '!(' + w.variable(self.expression) + ')'
         w.source('if (' + clause + ')')
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
         w.source_block()
@@ -86,7 +86,7 @@ class ForeachBlock:
         module['p_item'].__doc__ = 'item_statement : BEGIN_STATEMENT ITEM END_STATEMENT'
     def cg(self, w):
         w.source('#line %d "%s"' % (self.begin.lineno, w.current_file))
-        w.source('if((', self.begin.container, ').begin()!=(', self.begin.container, ').end())')
+        w.source('if((', w.variable(self.begin.container), ').begin()!=(', w.variable(self.begin.container), ').end())')
         w.source('#line %d "%s"' % (self.begin.lineno, w.current_file))
         w.source_block()
 
