@@ -20,6 +20,17 @@ class TemplateDecl:
             r += ';' + repr(self.seq) + ';' + repr(self.end)
         r += ')'
         return r
+    def cg(self, w, view):
+        self.begin.cg(w, view)
+
+        if not self.is_abstract:
+            w.is_template_context = True
+            for e in self.seq:
+                e.cg(w)
+            w.is_template_context = False
+
+            w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
+            w.source_leave()
 
 class BeginTemplateBlock:
     '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT'''
@@ -30,6 +41,16 @@ class BeginTemplateBlock:
         self.lineno = p.lineno(1)
     def __repr__(self):
         return 'BeginTemplateBlock(' + self.identifier + '(' + ','.join(self.params) + '))@' + str(self.lineno)
+    def cg(self, w, view):
+        w.header('#line %d "%s"' % (self.lineno, w.current_file))
+        w.header('void ', self.identifier, '(', ','.join(self.params), ');')
+
+        w.source('#line %d "%s"' % (self.lineno, w.current_file))
+        w.source('void ', view, '::', self.identifier, '(', ','.join(self.params), ')')
+        w.source('#line %d "%s"' % (self.lineno, w.current_file))
+        w.source_block()
+        w.source('#line %d "%s"' % (self.lineno, w.current_file))
+        w.source('cppcms::translation_domain_scope _trs(out(),_domain_id);')
 
 class AbstractTemplateDecl:
     '''abstract_template_decl : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN EQ ZERO END_STATEMENT'''
@@ -40,4 +61,7 @@ class AbstractTemplateDecl:
         self.lineno = p.lineno(1)
     def __repr__(self):
         return 'AbstractTemplateDecl(' + self.identifier + '(' + ','.join(self.params) + '))@' + str(self.lineno)
+    def cg(self, w, view):
+        w.header('#line %d "%s"' % (self.lineno, w.current_file))
+        w.header('void ', self.identifier, '(', ','.join(self.params), ') = 0;')
 

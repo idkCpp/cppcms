@@ -9,6 +9,13 @@ class CppDecl:
         self.lineno = p.lineno(3)
     def __repr__(self):
         return 'CppDecl(' + self.cpp_command + ')@' + str(self.lineno)
+    def cg(self, w):
+        if w.is_template_context:
+            w.source('#line %d "%s"' % (self.lineno, w.current_file))
+            w.source(self.cpp_command)
+        else:
+            w.header('#line %d "%s"' % (self.lineno, w.current_file))
+            w.header(self.cpp_command)
 
 class EndBlock:
     'end_block : BEGIN_STATEMENT END optional_block_type END_STATEMENT'

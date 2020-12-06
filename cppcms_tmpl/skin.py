@@ -14,6 +14,16 @@ class SkinDecl:
         module['p_view_seq'] = lambda p: non_empty_sequence(p)
         module['p_view_seq'].__doc__ = '''view_seq : view_seq view_decl
                                                    | view_decl'''
+    def cg(self, w):
+        self.begin.cg(w)
+
+        for e in self.seq:
+            e.cg(w)
+
+        w.header('#line %d "%s"' % (self.end.lineno, w.current_file))
+        w.header_leave()
+        w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
+        w.source_leave()
 
 class BeginSkinBlock:
     'begin_skin_block : BEGIN_STATEMENT SKIN IDENTIFIER END_STATEMENT'
@@ -25,4 +35,11 @@ class BeginSkinBlock:
         return 'BeginSkinBlock("' + self.name + '")@' + str(self.lineno)
 #    def register(module):
 #        module['block_types'].append('SKIN')
+    def cg(self, w):
+        w.header('#line %d "%s"' % (self.lineno, w.current_file))
+        w.header('namespace ', self.name)
+        w.header_block()
+        w.source('#line %d "%s"' % (self.lineno, w.current_file))
+        w.source('namespace ', self.name)
+        w.source_block()
 
