@@ -99,7 +99,10 @@ t_statement_STRING = r'"([^"]|\\")*"'
 t_statement_CHAR = r'\'.\''
 t_statement_STAR = r'\*'
 
-t_block_HTML = r'([^<]|<(?!%))+'
+def t_block_HTML(t):
+    r'([^<]|<(?!%))+'
+    t.lexer.lineno += t.value.count('\n')
+    return t
 
 t_block_begin_statement = t_begin_statement
 
