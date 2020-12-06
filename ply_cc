@@ -45,9 +45,9 @@ reserved = {
 
 tokens += reserved.values()
 
-t_ignore = " \t\n"
-t_statementcommand_ignore = " \t\n"
-t_statement_ignore = " \t\n"
+t_ignore = " \t"
+t_statementcommand_ignore = " \t"
+t_statement_ignore = " \t"
 t_block_ignore = ""
 t_cppcommand_ignore = ""
 
@@ -118,42 +118,99 @@ t_statementcommand_error = t_error
 t_cppcommand_error = t_error
 t_block_error = t_error
 
-def p_translation_unit(p):
-    '''translation_unit : translation_unit decl
-                        | decl'''
+def t_NL(t):
+    r'\n+'
+    t.lexer.lineno += len(t.value)
+
+t_statement_NL = t_NL
+t_statementcommand_NL = t_NL
+t_cppcommand_NL = t_NL
+
+def t_block_NL(t):
+    r'\n'
+    t.lexer.lineno += 1
+    return t
+
+start = 'translation_unit'
+
+def non_empty_sequence(p):
     if type(p[1]) == list:
         p[0] = p[1] + [ p[2] ]
     else:
         p[0] = [ p[1] ]
+
+def sequence(p):
+    if len(p) == 3:
+        p[0] = p[1] + [ p[2] ]
+    elif len(p) == 2:
+        p[0] = [ p[1] ]
+    else:
+        p[0] = []
+
+p_translation_unit = lambda p: non_empty_sequence(p)
+p_translation_unit.__doc__ =  '''translation_unit : translation_unit decl
+                                                  | decl'''
 
 def p_decl(p):
     '''decl : cpp_decl
             | skin_decl'''
     p[0] = p[1]
 
-def p_cpp_decl(p):
+def register(clz, mod):
+    name = 'p_' + clz.__doc__.split(' ')[0]
+    mod[name] = lambda p: clz(p)
+    mod[name].__doc__ = clz.__doc__
+    reg = getattr(clz, 'register', None)
+    if reg:
+        reg(mod) # call class-supplied register(module) method
+
+class CppDecl:
     'cpp_decl : BEGIN_STATEMENT CPP COMMAND END_STATEMENT'
-    p[0] = ( 'CPP', p[3] )
+    def __init__(self, p):
+        p[0] = self
+        self.cpp_command = p[3]
+        self.lineno = p.lineno(3)
+    def __repr__(self):
+        return 'CppDecl(' + self.cpp_command + ')@' + str(self.lineno)
 
-def p_skin_decl(p):
+register(CppDecl, vars())
+
+class SkinDecl:
     'skin_decl : begin_skin_block view_seq end_block'
-    p[0] = ( 'skin', p[1], p[2] )
+    def __init__(self, p):
+        p[0] = self
+        self.begin = p[1]
+        self.seq = p[2]
+        self.end = p[3]
+    def __repr__(self):
+        return 'SkinDecl(' + repr(self.begin) + ';' + repr(self.seq) + ';' + repr(self.end) + ')'
+    def register(module):
+        module['p_view_seq'] = lambda p: non_empty_sequence(p)
+        module['p_view_seq'].__doc__ = '''view_seq : view_seq view_decl
+                                                   | view_decl'''
+register(SkinDecl, vars())
 
-def p_begin_skin_block(p):
+class BeginSkinBlock:
     'begin_skin_block : BEGIN_STATEMENT SKIN IDENTIFIER END_STATEMENT'
-    p[0] = p[3]
+    def __init__(self, p):
+        p[0] = self
+        self.name = p[3]
+        self.lineno = p.lineno(1)
+    def __repr__(self):
+        return 'BeginSkinBlock("' + self.name + '")@' + str(self.lineno)
 
-def p_view_seq(p):
-    '''view_seq : view_seq view_decl
-                | view_decl'''
-    if len(p) == 3:
-        p[0] = p[1] + [ p[2] ]
-    else:
-        p[0] = [ p[1] ]
+register(BeginSkinBlock, vars())
 
-def p_end_block(p):
+class EndBlock:
     'end_block : BEGIN_STATEMENT END optional_block_type END_STATEMENT'
-    p[0] = ( 'end', )
+    def __init__(self, p):
+        p[0] = self
+        self.type = p[3]
+        self.lineno = p.lineno(1)
+    def __repr__(self):
+        return 'EndBlock(' + (self.type if self.type else 'any') + ')@' + str(self.lineno)
+
+register(EndBlock, vars())
 
 def p_optional_block_type(p):
     '''optional_block_type : TMPL
@@ -161,18 +218,44 @@ def p_optional_block_type(p):
                            | SKIN
                            | ITEM
                            |'''
+    if len(p) == 2:
+        p[0] = p[1]
+    else:
+        p[0] = ''
 
-def p_view_decl(p):
+class ViewDecl:
     'view_decl : begin_view_block template_seq end_block'
-    p[0] = ( 'view', p[1], p[2] )
+    def __init__(self, p):
+        p[0] = self
+        self.begin = p[1]
+        self.seq = p[2]
+        self.end = p[3]
+    def __repr__(self):
+        return 'ViewDecl(' + repr(self.begin) + ';' + repr(self.seq) + ';' + repr(self.end) + ')'
+    def register(module):
+        module['p_template_seq'] = lambda p: sequence(p)
+        module['p_template_seq'].__doc__ = '''template_seq : template_seq template_decl
+                                                           | template_decl
+                                                           |'''
 
-def p_begin_view_block(p):
+register(ViewDecl, vars())
+
+class BeginViewBlock:
     '''begin_view_block : BEGIN_STATEMENT VIEW IDENTIFIER USES possibly_scoped_identifier END_STATEMENT
                         | BEGIN_STATEMENT VIEW IDENTIFIER USES possibly_scoped_identifier EXTENDS IDENTIFIER END_STATEMENT'''
-    if len(p) == 7:
-        p[0] = ( p[3], p[5], None )
-    else:
-        p[0] = ( p[3], p[5], p[7] )
+    def __init__(self, p):
+        p[0] = self
+        self.identifier = p[3]
+        self.contenttype = p[5]
+        if len(p) == 7:
+            self.extends = None
+        else:
+            self.extends = p[7]
+        self.lineno = p.lineno(1)
+    def __repr__(self):
+        return 'BeginViewBlock("' + self.identifier + '";' + self.contenttype + (';' + self.extends if self.extends else '') + ')@' + str(self.lineno)
+
+register(BeginViewBlock, vars())
 
 def p_possibly_scoped_identifier(p):
     '''possibly_scoped_identifier : possibly_scoped_identifier SCOPE IDENTIFIER
@@ -182,25 +265,53 @@ def p_possibly_scoped_identifier(p):
     else:
         p[0] = p[1]
 
-def p_template_seq(p):
-    '''template_seq : template_seq template_decl
-                    | template_decl
-                    |'''
-    if len(p) == 3:
-        p[0] = p[1] + [ p[2] ]
-    elif len(p) == 2:
-        p[0] = [ p[1] ]
-    else:
-        p[0] = []
+class TemplateDecl:
+    '''template_decl : begin_template_block html_block end_block
+                     | abstract_template_decl'''
+    def __init__(self, p):
+        p[0] = self
+        if len(p) == 4:
+            self.is_abstract = False
+            self.begin = p[1]
+            self.seq = p[2]
+            self.end = p[3]
+        else:
+            self.is_abstract = True
+            self.begin = p[1]
+    def __repr__(self):
+        r = 'TemplateDecl(' + repr(self.begin)
+        if self.is_abstract:
+            r += ';abstract)'
+        else:
+            r += ';' + repr(self.seq) + ';' + repr(self.end)
+        r += ')'
+        return r
 
-def p_template_decl(p):
-    '''template_decl : begin_template_block html_block end_block'''
-    p[0] = ( p[1][0], p[1][1], p[1][2], p[2] )
+register(TemplateDecl, vars())
 
-def p_begin_template_block(p):
-    '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT
-                            | BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN EQ ZERO END_STATEMENT'''
-    p[0] = ( 'template' if len(p) == 8 else 'abstract-template' , p[3], p[5] )
+class BeginTemplateBlock:
+    '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT'''
+    def __init__(self, p):
+        p[0] = self
+        self.identifier = p[3]
+        self.params = p[5]
+        self.lineno = p.lineno(1)
+    def __repr__(self):
+        return 'BeginTemplateBlock(' + self.identifier + '(' + ','.join(self.params) + '))@' + str(self.lineno)
+
+register(BeginTemplateBlock, vars())
+
+class AbstractTemplateDecl:
+    '''abstract_template_decl : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN EQ ZERO END_STATEMENT'''
+    def __init__(self, p):
+        p[0] = self
+        self.identifier = p[3]
+        self.params = p[5]
+        self.lineno = p.lineno(1)
+    def __repr__(self):
+        return 'AbstractTemplateDecl(' + self.identifier + '(' + ','.join(self.params) + '))@' + str(self.lineno)
+
+register(AbstractTemplateDecl, vars())
 
 def p_expr_list(p):
     '''expr_list : expr_list COMMA expr
@@ -213,13 +324,9 @@ def p_expr_list(p):
     else:
         p[0] = []
 
-def p_html_block_from_HTML(p):
-    '''html_block : html_block html_statement
-                  |'''
-    if len(p) == 3:
-        p[0] = p[1] + [ p[2] ]
-    else:
-        p[0] = []
+p_html_block_sequence = lambda p: sequence(p)
+p_html_block_sequence.__doc__ = '''html_block : html_block html_statement
+                                              |'''
 
 def p_html_statement_from_cpp_decl(p):
     'html_statement : cpp_decl'
@@ -281,7 +388,8 @@ def p_render_command(p):
             p[0] = ( 'url', p[2], None )
 
 def p_html_statement_from_HTML(p):
-    'html_statement : HTML'
+    '''html_statement : HTML
+                      | NL'''
     p[0] = ( 'html', p[1] )
 
 def p_expr(p):
@@ -319,7 +427,9 @@ input_data = """
 """
 
 if False:
-    if False:
+    import ply.lex as lex
+    lexer = lex.lex()
+    if True:
         lexer.input(input_data)
 
         while True:
