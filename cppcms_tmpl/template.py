@@ -30,7 +30,7 @@ class TemplateDecl:
             w.is_template_context = False
 
             w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
-            w.source_leave()
+            w.source_leave('} // end of template ', self.begin.identifier)
 
 class BeginTemplateBlock:
     '''begin_template_block : BEGIN_STATEMENT TMPL IDENTIFIER LPAREN expr_list RPAREN END_STATEMENT'''
@@ -46,9 +46,7 @@ class BeginTemplateBlock:
         w.header('void ', self.identifier, '(', ','.join(self.params), ');')
 
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source('void ', view, '::', self.identifier, '(', ','.join(self.params), ')')
-        w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source_block()
+        w.source_block('void ', view, '::', self.identifier, '(', ','.join(self.params), ') {')
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
         w.source('cppcms::translation_domain_scope _trs(out(),_domain_id);')
 

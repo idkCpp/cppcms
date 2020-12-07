@@ -17,7 +17,7 @@ class IfBlock:
             e.cg(w)
 
         w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
-        w.source_leave()
+        w.source_leave('} // endif')
 
 class IfElseBlock:
     'html_statement : if_statement html_block else_statement html_block end_block'
@@ -37,7 +37,9 @@ class IfElseBlock:
             e.cg(w)
 
         w.source('#line %d "%s"' % (self.els.lineno, w.current_file))
-        w.source('} else {')
+        w.source_indent -= 1
+        w.source('}else{')
+        w.source_indent += 1
 
         for e in self.elseblock:
             e.cg(w)
@@ -58,9 +60,7 @@ class IfStatement:
     def cg(self, w):
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
         clause = w.variable(self.expression) if not self.inverted else '!(' + w.variable(self.expression) + ')'
-        w.source('if (' + clause + ')')
-        w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source_block()
+        w.source_block('if(' + clause + ') {')
 
 class ElseStatement:
     'else_statement : BEGIN_STATEMENT ELSE END_STATEMENT'
@@ -86,9 +86,7 @@ class ForeachBlock:
         module['p_item'].__doc__ = 'item_statement : BEGIN_STATEMENT ITEM END_STATEMENT'
     def cg(self, w):
         w.source('#line %d "%s"' % (self.begin.lineno, w.current_file))
-        w.source('if((', w.variable(self.begin.container), ').begin()!=(', w.variable(self.begin.container), ').end())')
-        w.source('#line %d "%s"' % (self.begin.lineno, w.current_file))
-        w.source_block()
+        w.source_block('if((', w.variable(self.begin.container), ').begin()!=(', w.variable(self.begin.container), ').end()) {')
 
         for e in self.pre:
             e.cg(w)
@@ -101,7 +99,7 @@ class ForeachBlock:
         w.variables.pop()
 
         w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
-        w.source_leave()
+        w.source_leave('} // end of item')
 
         for e in self.post:
             e.cg(w)
@@ -123,10 +121,7 @@ class ForeachStatement:
         container = w.variable(self.container)
 
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source('for(CPPCMS_TYPEOF((', container, ').begin()) item_ptr=(', container, ').begin(),item_ptr_end=(', container, ').end();item_ptr!=item_ptr_end;++item_ptr)')
-
-        w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source_block()
+        w.source_block('for(CPPCMS_TYPEOF((', container, ').begin()) item_ptr=(', container, ').begin(),item_ptr_end=(', container, ').end();item_ptr!=item_ptr_end;++item_ptr) {')
 
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
         w.source('CPPCMS_TYPEOF(*item_ptr) &', self.identifier, '=*item_ptr;')

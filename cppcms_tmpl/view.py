@@ -23,8 +23,6 @@ class ViewDecl:
 
         w.header('#line %d "%s"' % (self.end.lineno, w.current_file))
         w.header_leave()
-        w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
-        w.source_leave()
 
 class BeginViewBlock:
     '''begin_view_block : BEGIN_STATEMENT VIEW IDENTIFIER USES possibly_scoped_identifier END_STATEMENT

@@ -21,9 +21,9 @@ class SkinDecl:
             e.cg(w)
 
         w.header('#line %d "%s"' % (self.end.lineno, w.current_file))
-        w.header_leave()
+        w.header_leave('} // end of namespace ', self.begin.name)
         w.source('#line %d "%s"' % (self.end.lineno, w.current_file))
-        w.source_leave()
+        w.source_leave('} // end of namespace ', self.begin.name)
 
 class BeginSkinBlock:
     'begin_skin_block : BEGIN_STATEMENT SKIN IDENTIFIER END_STATEMENT'
@@ -37,9 +37,7 @@ class BeginSkinBlock:
 #        module['block_types'].append('SKIN')
     def cg(self, w):
         w.header('#line %d "%s"' % (self.lineno, w.current_file))
-        w.header('namespace ', self.name)
-        w.header_block()
+        w.header_block('namespace ', self.name, ' {')
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source('namespace ', self.name)
-        w.source_block()
+        w.source_block('namespace ', self.name, ' {')
 

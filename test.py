@@ -25,24 +25,24 @@ class Writer:
     def header(self, *parts):
         self.header_file.write('\t'*self.source_indent + ''.join(parts) + '\n')
 
-    def header_block(self):
-        self.header('{')
+    def header_block(self, *parts):
+        self.header(*parts or '{')
         self.header_indent += 1
 
-    def header_leave(self):
+    def header_leave(self, *parts):
         self.header_indent -= 1
-        self.header('}')
+        self.header(*parts or '}')
 
     def source(self, *parts):
         self.source_file.write('\t'*self.source_indent + ''.join(parts) + '\n')
 
-    def source_block(self):
-        self.source('{')
+    def source_block(self, *parts):
+        self.source(*parts or '{')
         self.source_indent += 1
 
-    def source_leave(self):
+    def source_leave(self, *parts):
         self.source_indent -= 1
-        self.source('}')
+        self.source(*parts or '}')
 
     def variable(self, v):
         if '::' in v:
