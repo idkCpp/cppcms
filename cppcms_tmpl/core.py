@@ -40,6 +40,8 @@ def p_optional_block_type(p):
                            | VIEW
                            | SKIN
                            | ITEM
+                           | IF
+                           | FOREACH
                            |'''
     if len(p) == 2:
         p[0] = p[1]

@@ -48,18 +48,32 @@ class IfElseBlock:
         w.source_leave()
 
 class IfStatement:
-    '''if_statement : BEGIN_STATEMENT IF expr END_STATEMENT
-                    | BEGIN_STATEMENT IF NOT expr END_STATEMENT'''
+    '''if_statement : BEGIN_STATEMENT IF simple_expr END_STATEMENT
+                    | BEGIN_STATEMENT IF NOT simple_expr END_STATEMENT
+                    | BEGIN_STATEMENT IF LPAREN expr RPAREN END_STATEMENT'''
     def __init__(self, p):
         p[0] = self
-        self.inverted = len(p) == 6
-        self.expression = p[3] if not self.inverted else p[4]
+        if len(p) == 5:
+            self.inverted = False
+            self.expression = p[3]
+            self.direct = False
+        elif len(p) == 6:
+            self.inverted = True
+            self.expression = p[4]
+            self.direct = False
+        else:
+            self.inverted = False
+            self.expression = p[4]
+            self.direct = True
         self.lineno = p.lineno(1)
     def __repr__(self):
         return 'IfStatement(' + ('inverted:' if self.inverted else '') + self.expression + ')@' + str(self.lineno)
     def cg(self, w):
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        clause = w.variable(self.expression) if not self.inverted else '!(' + w.variable(self.expression) + ')'
+        if self.direct:
+            clause = self.expression
+        else:
+            clause = w.variable(self.expression) if not self.inverted else '!(' + w.variable(self.expression) + ')'
         w.source_block('if(' + clause + ') {')
 
 class ElseStatement:
@@ -118,13 +132,16 @@ class ForeachStatement:
     def __repr__(self):
         return 'ForeachStatement(' + self.identifier + ';' + self.container + ')@' + str(self.lineno)
     def cg(self, w):
-        container = w.variable(self.container)
+
+        stmt = 'for(CPPCMS_TYPEOF((%(c)s).begin()) %(i)s_ptr=(%(c)s).begin(),%(i)s_ptr_end=(%(c)s).end();%(i)s_ptr!=%(i)s_ptr_end;++%(i)s_ptr) {' % { 'i': self.identifier, 'c': w.variable(self.container) }
 
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source_block('for(CPPCMS_TYPEOF((', container, ').begin()) item_ptr=(', container, ').begin(),item_ptr_end=(', container, ').end();item_ptr!=item_ptr_end;++item_ptr) {')
+        w.source_block(stmt)
+
+        stmt = 'CPPCMS_TYPEOF(*%(i)s_ptr) &%(i)s=*%(i)s_ptr;' % { 'i': self.identifier }
 
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source('CPPCMS_TYPEOF(*item_ptr) &', self.identifier, '=*item_ptr;')
+        w.source(stmt)
 
         w.variables.append(self.identifier)
 

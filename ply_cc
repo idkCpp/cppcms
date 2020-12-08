@@ -20,7 +20,7 @@ tokens = [
     'COMMAND',
     'BEGIN_STATEMENT','END_STATEMENT',
     'NUMBER','IDENTIFIER','STRING','CHAR','ZERO',
-    'SCOPE', 'MEMBER', 'PTRMEMBER', 'LPAREN', 'RPAREN', 'COMMA', 'INC', 'DEC', 'STAR',
+    'SCOPE', 'MEMBER', 'PTRMEMBER', 'LPAREN', 'RPAREN', 'COMMA', 'INC', 'DEC', 'STAR', 'EXCLAMATION_MARK', 'BITAND', 'AND', 'BITOR', 'OR', 'SAME',
     'HTML'
     ]
 
@@ -98,6 +98,13 @@ t_statement_COMMA = r','
 t_statement_STRING = r'"([^"]|\\")*"'
 t_statement_CHAR = r'\'.\''
 t_statement_STAR = r'\*'
+t_statement_EXCLAMATION_MARK = r'!'
+t_statement_BITAND = r'&(?!&)'
+t_statement_AND = r'&&'
+t_statement_BITOR = r'\|(?!\|)'
+t_statement_OR = r'\|\|'
+t_statement_EQ = r'=(?!=)'
+t_statement_SAME = r'=='
 
 def t_block_HTML(t):
     r'([^<]|<(?!%))+'
@@ -144,7 +151,7 @@ from cppcms_tmpl.core import CppDecl, EndBlock, p_translation_unit, p_decl, p_op
 register(CppDecl, vars())
 register(EndBlock, vars())
 
-from cppcms_tmpl.cpp import p_possibly_scoped_identifier, p_expr_list, p_expr
+from cppcms_tmpl.cpp import p_possibly_scoped_identifier, p_expr_list, p_expr, p_simple_expr
 
 from cppcms_tmpl.skin import SkinDecl, BeginSkinBlock
 register(SkinDecl, vars())
@@ -161,7 +168,7 @@ register(BeginTemplateBlock, vars())
 register(AbstractTemplateDecl, vars())
 
 
-from cppcms_tmpl.html import IfBlock, IfElseBlock, IfStatement, ElseStatement, ForeachBlock, ForeachStatement, Html, OutputStatement, UrlStatement, p_html_block_sequence, p_html_statement_from_cpp_decl
+from cppcms_tmpl.html import IfBlock, IfElseBlock, IfStatement, ElseStatement, ForeachBlock, ForeachStatement, Html, OutputStatement, Filter, UrlStatement, p_html_block_sequence, p_html_statement_from_cpp_decl
 register(IfBlock, vars())
 register(IfElseBlock, vars())
 register(IfStatement, vars())
