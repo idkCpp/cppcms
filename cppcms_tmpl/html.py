@@ -161,17 +161,61 @@ class Html:
         w.source('out()<<"', content, '";')
 
 class OutputStatement:
-    'html_statement : BEGIN_STATEMENT EQ expr END_STATEMENT'
+    '''html_statement : BEGIN_STATEMENT EQ simple_expr filter_seq END_STATEMENT'''
     def __init__(self, p):
         p[0] = self
         self.expression = p[3]
+        self.filter_seq = p[4]
         self.lineno = p.lineno(1)
     def __repr__(self):
         return 'OutputStatement(' + self.expression + ')@' + str(self.lineno)
     def cg(self, w):
         var = w.variable(self.expression)
+
         w.source('#line %d "%s"' % (self.lineno, w.current_file))
-        w.source('out()<<cppcms::filters::escape(', var, ');')
+        if self.filter_seq:
+            w.source('out()<<' + ''.join(OutputStatement.nest_filter(var, self.filter_seq)) + ';')
+        else:
+            w.source('out()<<cppcms::filters::escape(', var, ');')
+    def nest_filter(var, filter_seq):
+        if len(filter_seq) > 0:
+            res = []
+            f = filter_seq[0]
+            if f.is_extern:
+                res.append('content.')
+            else:
+                res.append('cppcms::filters::')
+            res.append(f.identifier)
+            res.append('(')
+            res += OutputStatement.nest_filter(var, filter_seq[1:])
+            res.append(')')
+            return res
+        else:
+            return [ var ]
+    def register(module):
+        module['p_filter_seq'] = lambda p: sequence(p)
+        module['p_filter_seq'].__doc__ = '''filter_seq : filter_seq filter
+                                                       |'''
+
+class Filter:
+    '''filter : BITOR IDENTIFIER optional_params
+              | BITOR EXTERN IDENTIFIER optional_params'''
+    def __init__(self, p):
+        p[0] = self
+        if len(p) == 4:
+            self.is_extern = False
+            self.identifier = p[2]
+            self.parameter = p[3]
+        else:
+            self.is_extern = True
+            self.identifier = p[3]
+            self.parameter = p[4]
+    def __repr__(self):
+        return 'Filter(' + self.identifier + ';' + repr(self.parameter) + (';extern' if self.is_extern else '') + ')'
+    def register(module):
+        module['p_optional_params'] = lambda p: sequence(p)
+        module['p_optional_params'].__doc__ = '''optional_params : LPAREN expr_list RPAREN
+                                                                 |'''
 
 class UrlStatement:
     '''html_statement : BEGIN_STATEMENT URL STRING END_STATEMENT

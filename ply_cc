@@ -33,6 +33,7 @@ reserved = {
         'extends' : 'EXTENDS',
         'url' : 'URL',
         'using' : 'USING',
+        'ext' : 'EXTERN',
         'if' : 'IF',
         'not' : 'NOT',
         'else' : 'ELSE',
@@ -177,6 +178,7 @@ register(ForeachBlock, vars())
 register(ForeachStatement, vars())
 register(Html, vars())
 register(OutputStatement, vars())
+register(Filter, vars())
 register(UrlStatement, vars())
 
 #lexer = lex.lex()
